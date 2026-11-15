@@ -14,3 +14,4 @@ constexpr int PIN_LED_ONBOARD = 2;   // Onboard LED (GPIO 2)
 constexpr int PIN_LED         = 23;  // External LED on breadboard, via 220Ω resistor
 constexpr int PIN_BUTTON      = 18;  // Push button, wired to GND, uses INPUT_PULLUP
 constexpr int PIN_BUTTON_BOOT = 0;   // Onboard BOOT button (GPIO 0)
+constexpr int PIN_BUZZER = 19;  // Passive buzzer

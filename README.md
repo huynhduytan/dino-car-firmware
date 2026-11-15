@@ -7,7 +7,7 @@ Offline ESP32 toy car that teaches English vocabulary to kids via RFID cards —
 | Buổi | Ngày | Nội dung | Trạng thái |
 |---|---|---|---|
 | B1 | 14/11/2026 | Cài đặt và "Hello LED": build → flash → monitor, GPIO, INPUT_PULLUP | ✅ Xong |
-| B2 | 21/11/2026 | Không dùng delay(): millis(), chống dội phím, buzzer GPIO 19 bằng tone(), FSM nhỏ | ⬜ |
+| B2 | 21/11/2026 | Không dùng delay(): millis(), chống dội phím, buzzer GPIO 19 bằng tone(), FSM nhỏ | ✅ Xong (làm sớm 15/11) |
 | B3 | 28/11/2026 | FreeRTOS task + queue, ngắt IRAM_ATTR | ⬜ |
 | B4 | 05/12/2026 | Đọc thẻ RFID RC522 qua SPI, đo tầm đọc | ⬜ |
 | B5 | 12/12/2026 | DFPlayer Mini qua UART2, module audio không chặn | ⬜ |
