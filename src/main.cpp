@@ -5,14 +5,14 @@ int lastState = HIGH;
 unsigned long pressCount = 0;
 void setup() {
   Serial.begin(115200);
-  pinMode(PIN_LED_ONBOARD, OUTPUT);
-  pinMode(PIN_BUTTON_BOOT, INPUT_PULLUP);   // not pressed = HIGH, pressed = LOW
-  Serial.println("B1 ready - press BOOT button");
+  pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_BUTTON, INPUT_PULLUP);   // not pressed = HIGH, pressed = LOW
+  Serial.println("B1 ready - press button");
 }
 
 void loop() {
-  int state = digitalRead(PIN_BUTTON_BOOT);
-  digitalWrite(PIN_LED_ONBOARD, state == LOW ? HIGH : LOW);
+  int state = digitalRead(PIN_BUTTON);
+  digitalWrite(PIN_LED, state == LOW ? HIGH : LOW);
   if (lastState == HIGH && state == LOW) {   // print only on the falling edge (press)
     pressCount++;
     Serial.printf("pressed #%lu\n", pressCount);
