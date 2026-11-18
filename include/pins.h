@@ -10,7 +10,7 @@
 // Unlike a regular variable: uses no RAM, can't be reassigned (compile error if you try).
 // Unlike #define: has a real type (int), so the compiler can catch type errors.
 
-constexpr int PIN_LED_ONBOARD = 2;   // Onboard LED (GPIO 2)
+constexpr int PIN_LED_ONBOARD = 2;   // Onboard LED (GPIO 2) — KNOWN FAULTY on this board (confirmed B2, 2026-11-18: identical code works on GPIO23/GPIO4, dead on GPIO2). Do not reuse.
 constexpr int PIN_LED         = 23;  // External LED on breadboard, via 220Ω resistor
 constexpr int PIN_BUTTON      = 18;  // Push button, wired to GND, uses INPUT_PULLUP
 constexpr int PIN_BUTTON_BOOT = 0;   // Onboard BOOT button (GPIO 0)
