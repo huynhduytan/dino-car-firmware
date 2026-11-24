@@ -1,105 +1,96 @@
 #include <Arduino.h>
 #include "pins.h"
 
-const unsigned long DEBOUNCE_MS = 30;
-int lastRawState = HIGH;
-int stableState = HIGH;
-unsigned long pressCount = 0;
-unsigned long lastChangeTime = 0;
-
 const int happyNotes[] = {523, 659, 784, 1047}; // Đô-Mi-Sol-Đô (quãng 8), giai điệu đi lên = "vui"
 const int happyDurations[] = {100, 100, 100, 150};
 const int sadNotes[] = {392, 262}; // Sol xuống Đô (quãng 8 thấp), đi xuống chậm = "buồn"
 const int sadDurations[] = {250, 350};
 
-const int *melodyNotes = nullptr;
-const int *melodyDurations = nullptr;
-int melodyLength = 0;
-int melodyNoteIndex = 0;
-unsigned long noteStartTime = 0;
-bool melodyPlaying = false;
+enum MelodyType { MELODY_HAPPY, MELODY_SAD };
 
-void startMelody(const int notes[], const int durations[], int length)
-{
-  melodyNotes = notes;
-  melodyDurations = durations;
-  melodyLength = length;
-  melodyNoteIndex = 0;
-  noteStartTime = millis();
-  melodyPlaying = true;
-  tone(PIN_BUZZER, melodyNotes[0], melodyDurations[0]);
+QueueHandle_t buttonEventQueue;
+QueueHandle_t melodyQueue;
+QueueHandle_t ledQueue;
+
+void IRAM_ATTR buttonISR() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  uint8_t dummy = 0;
+  xQueueSendFromISR(buttonEventQueue, &dummy, &xHigherPriorityTaskWoken);
+  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-void updateMelody()
-{
-  if (!melodyPlaying)
-    return;
-  if (millis() - noteStartTime >= (unsigned long)melodyDurations[melodyNoteIndex])
-  {
-    melodyNoteIndex++;
-    if (melodyNoteIndex >= melodyLength)
-    {
-      melodyPlaying = false;
-      return;
+void taskButton(void *param) {
+  uint8_t dummy;
+  int stableState = HIGH;
+  unsigned long pressCount = 0;
+  bool nextIsHappy = true;
+  for (;;) {
+    xQueueReceive(buttonEventQueue, &dummy, portMAX_DELAY);  // ngủ cho tới khi có ngắt
+    vTaskDelay(pdMS_TO_TICKS(30));                           // chờ dội phím lắng xuống
+    int raw = digitalRead(PIN_BUTTON);
+    if (raw != stableState) {
+      stableState = raw;
+      if (stableState == LOW) {
+        pressCount++;
+        Serial.printf("[btn] pressed #%lu (core %d, stack left %u words)\n",
+                      pressCount, xPortGetCoreID(), uxTaskGetStackHighWaterMark(NULL));
+        MelodyType type = nextIsHappy ? MELODY_HAPPY : MELODY_SAD;
+        xQueueSend(melodyQueue, &type, 0);   // báo tin cho taskBuzzer, không chờ
+        nextIsHappy = !nextIsHappy;
+      }
     }
-    noteStartTime = millis();
-    tone(PIN_BUZZER, melodyNotes[melodyNoteIndex], melodyDurations[melodyNoteIndex]);
   }
 }
 
-enum State
-{
-  IDLE,
-  PLAYING
-};
-State state = IDLE;
+void taskLed(void *param) {
+  bool ledOn;
+  for (;;) {
+    xQueueReceive(ledQueue, &ledOn, portMAX_DELAY);   // ngủ cho tới khi taskBuzzer báo bật/tắt
+    digitalWrite(PIN_LED, ledOn ? HIGH : LOW);
+  }
+}
+
+void taskBuzzer(void *param) {
+  MelodyType type;
+  for (;;) {
+    xQueueReceive(melodyQueue, &type, portMAX_DELAY);   // ngủ cho tới khi có lệnh phát nhạc
+    const int *notes = (type == MELODY_HAPPY) ? happyNotes : sadNotes;
+    const int *durations = (type == MELODY_HAPPY) ? happyDurations : sadDurations;
+    int length = (type == MELODY_HAPPY) ? 4 : 2;
+    Serial.printf("[buzzer] playing %s (core %d, stack left %u words)\n",
+                  type == MELODY_HAPPY ? "happy" : "sad", xPortGetCoreID(),
+                  uxTaskGetStackHighWaterMark(NULL));
+
+    bool ledOn = true;
+    xQueueSend(ledQueue, &ledOn, 0);
+    for (int i = 0; i < length; i++) {
+      tone(PIN_BUZZER, notes[i], durations[i]);
+      vTaskDelay(pdMS_TO_TICKS(durations[i]));   // chặn CHỈ task này — task khác (taskButton, loop) vẫn chạy bình thường
+    }
+    bool ledOff = false;
+    xQueueSend(ledQueue, &ledOff, 0);
+  }
+}
 
 void setup()
 {
   Serial.begin(115200);
-  pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   pinMode(PIN_BUZZER, OUTPUT);
-  Serial.println("ready - press button");
+  pinMode(PIN_LED, OUTPUT);
+
+  buttonEventQueue = xQueueCreate(10, sizeof(uint8_t));
+  melodyQueue = xQueueCreate(4, sizeof(MelodyType));
+  ledQueue = xQueueCreate(4, sizeof(bool));
+  xTaskCreate(taskButton, "taskButton", 2048, NULL, 1, NULL);
+  xTaskCreate(taskBuzzer, "taskBuzzer", 2048, NULL, 1, NULL);
+  xTaskCreate(taskLed, "taskLed", 2048, NULL, 1, NULL);
+  attachInterrupt(digitalPinToInterrupt(PIN_BUTTON), buttonISR, CHANGE);
+
+  Serial.println("B3 step 3 ready - taskButton + taskBuzzer + taskLed via queue");
 }
 
 void loop()
 {
-  updateMelody();
-
-  int raw = digitalRead(PIN_BUTTON);
-
-  if (raw != lastRawState)
-  {
-    lastChangeTime = millis();
-  }
-  if (millis() - lastChangeTime > DEBOUNCE_MS && raw != stableState)
-  {
-    stableState = raw;
-    digitalWrite(PIN_LED, stableState == LOW ? HIGH : LOW);
-    if (stableState == LOW && state == IDLE)
-    { // print only on the falling edge (press)
-      pressCount++;
-      Serial.printf("pressed #%lu\n", pressCount);
-      static bool nextIsHappy = true;
-      if (nextIsHappy)
-      {
-        startMelody(happyNotes, happyDurations, 4);
-      }
-      else
-      {
-        startMelody(sadNotes, sadDurations, 2);
-      }
-      nextIsHappy = !nextIsHappy;
-      digitalWrite(PIN_LED, HIGH);
-      state = PLAYING;
-    }
-  }
-  if (state == PLAYING && !melodyPlaying)
-  {
-    digitalWrite(PIN_LED, LOW);
-    state = IDLE;
-  }
-
-  lastRawState = raw;
+  // Để trống — mọi việc đã chuyển sang 3 task riêng (taskButton, taskBuzzer, taskLed).
 }
